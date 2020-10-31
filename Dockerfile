@@ -19,6 +19,18 @@ RUN sed -i "s|Listen 80|Listen 8000|g" /etc/apache2/ports.conf && \
     sed -i "s|:80|:8000|g" /etc/apache2/sites-available/* && \
     echo "max_execution_time = 7200\npost_max_size = 10240M\nupload_max_filesize = 10240M\nmemory_limit = 512M" >> /usr/local/etc/php/php.ini
 
+# configure self-signed SSL on
+RUN a2enmod ssl && \
+    sed -i "s|Listen 443|Listen 8443 ssl|g" /etc/apache2/ports.conf && \
+    sed -i "s|:443|:8443|g" /etc/apache2/sites-available/* && \
+    openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 -subj \
+    "/C=../ST=...../L=..../O=..../CN=..." \
+    -keyout /etc/ssl/private/ssl-cert-snakeoil.key -out /etc/ssl/certs/ssl-cert-snakeoil.pem && \
+    chgrp -R www-data /etc/ssl/private/ && \
+    chmod 750 /etc/ssl/private/ && \
+    chmod 640 /etc/ssl/private/ssl-cert-snakeoil.key && \
+    ln -s /etc/apache2/sites-available/default-ssl.conf /etc/apache2/sites-enabled/
+
 RUN pip install -U youtube-dl
 
 RUN rm -rf /var/www/html/*
@@ -34,5 +46,6 @@ RUN install -d -m 0755 -o www-data -g www-data /var/www/html/videos
 USER www-data
 
 EXPOSE 8000
+EXPOSE 8443
 
 VOLUME ["/var/www/html/videos"]
