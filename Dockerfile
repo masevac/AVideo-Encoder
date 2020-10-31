@@ -8,7 +8,7 @@ FROM php:7-apache
 MAINTAINER TheAssassin <theassassin@assassinate-you.net>
 
 RUN apt-get update && \
-    apt-get install -y wget git zip default-libmysqlclient-dev libbz2-dev libmemcached-dev libsasl2-dev libfreetype6-dev libicu-dev libjpeg-dev libmemcachedutil2 libpng-dev libxml2-dev mariadb-client ffmpeg libimage-exiftool-perl python curl python-pip libzip-dev libonig-dev && \
+    apt-get install -y wget git zip default-libmysqlclient-dev libbz2-dev libmemcached-dev libsasl2-dev libfreetype6-dev libicu-dev libjpeg-dev libmemcachedutil2 libpng-dev libxml2-dev mariadb-client ffmpeg libimage-exiftool-perl python curl python-pip libzip-dev libonig-dev mariadb-server && \
     docker-php-ext-configure gd --with-freetype=/usr/include --with-jpeg=/usr/include && \
     docker-php-ext-install -j$(nproc) bcmath bz2 calendar exif gd gettext iconv intl mbstring mysqli opcache pdo_mysql zip && \
     rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/* /root/.cache && \
@@ -31,6 +31,12 @@ RUN a2enmod ssl && \
     chmod 640 /etc/ssl/private/ssl-cert-snakeoil.key && \
     ln -s /etc/apache2/sites-available/default-ssl.conf /etc/apache2/sites-enabled/
 
+# local mysql minimal configuration
+ARG mariadb_password=contrasinal
+RUN /etc/init.d/mysql start && \
+    echo "GRANT ALL PRIVILEGES ON *.* TO 'www-data'@'localhost' identified by '"$mariadb_password"';"|mysql && \
+    chmod +s /etc/init.d/mysql
+
 RUN pip install -U youtube-dl
 
 RUN rm -rf /var/www/html/*
@@ -41,6 +47,13 @@ RUN chown -R www-data. /var/www/html
 
 # create volume
 RUN install -d -m 0755 -o www-data -g www-data /var/www/html/videos
+
+# configure mysql to run as www-data, start at boot and prefill install form with working users/host/password for database
+RUN chown -R www-data: /run/mysqld/ /var/lib/mysql /var/log/mysql /etc/mysql && \
+    sed -i "2a mysqld_safe &" /usr/local/bin/docker-php-entrypoint && \
+    sed -i "s/root/www-data/g" /var/www/html/install/index.php /var/www/html/install/install.php && \
+    sed -i "s/localhost/127.0.0.1/g" /var/www/html/install/index.php /var/www/html/install/install.php && \
+    sed -i "s/\(Enter Database Password\"\)/\1 value=\""$mariadb_password"\"/" /var/www/html/install/index.php
 
 # set non-root user
 USER www-data
